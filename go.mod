@@ -1,4 +1,4 @@
-module github.com/jmploop/protoc-gen-go-asynq
+module github.com/linchao0815/protoc-gen-go-asynq
 
 go 1.17
 
