@@ -7,6 +7,9 @@ import (
 )
 
 var asynqTemplate = `
+import	"igspkg/trace"
+import 	rkgrpcmid "github.com/rookie-ninja/rk-grpc/v2/middleware"
+
 {{$svrType := .ServiceType}}
 {{$svrName := .ServiceName}}
 type {{.ServiceType}}JobServer interface {
@@ -25,10 +28,15 @@ func Register{{.ServiceType}}JobServer(mux *asynq.ServeMux, srv {{.ServiceType}}
 func _{{$svrType}}_{{.Name}}_Job_Handler(srv {{$svrType}}JobServer) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var in {{.Request}}
+		ctx, beforeCtx := trace.Before(ctx, "asynq", task.Type())
+		scp := rkgrpcmid.GetServerContextPayload(ctx)		
 		if err := proto.Unmarshal(task.Payload(), &in); err != nil {
+			trace.After(ctx, beforeCtx, err)
 			return err
 		}
+		scp["req"] = in		
 		err := srv.{{.Name}}(ctx, &in)
+		trace.After(ctx, beforeCtx, err)
 		return err
 	}
 }
