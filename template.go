@@ -7,9 +7,6 @@ import (
 )
 
 var asynqTemplate = `
-import	"igspkg/trace"
-import 	rkgrpcmid "github.com/rookie-ninja/rk-grpc/v2/middleware"
-
 {{$svrType := .ServiceType}}
 {{$svrName := .ServiceName}}
 type {{.ServiceType}}JobServer interface {
