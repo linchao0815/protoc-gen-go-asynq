@@ -41,6 +41,7 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	if len(file.Services) == 0 {
 		return
 	}
+	g.P("import	\"igspkg/log\"")
 	g.P("import	\"igspkg/trace\"")
 	g.P("import 	rkgrpcmid \"github.com/rookie-ninja/rk-grpc/v2/middleware\"")
 	g.P("// This is a compile-time assertion to ensure that this generated file")

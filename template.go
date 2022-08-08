@@ -33,6 +33,11 @@ func _{{$svrType}}_{{.Name}}_Job_Handler(srv {{$svrType}}JobServer) func(context
 		}
 		scp["req"] = in		
 		err := srv.{{.Name}}(ctx, &in)
+		if err != nil{
+			log.Errorln(task.Type(),log.Any("request",in),log.NewWhy(err))
+		}else{
+			log.Println(task.Type(),log.Any("request",in))
+		}		
 		trace.After(ctx, beforeCtx, err)
 		return err
 	}
