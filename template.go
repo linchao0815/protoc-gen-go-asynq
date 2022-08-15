@@ -27,14 +27,14 @@ func _{{$svrType}}_{{.Name}}_Job_Handler(srv {{$svrType}}JobServer) func(context
 		var in {{.Request}}
 		ctx, beforeCtx := trace.Before(ctx, "asynq", task.Type())
 		scp := rkgrpcmid.GetServerContextPayload(ctx)		
-		if err := proto.Unmarshal(task.Payload(), &in); err != nil {
+		if err := json.Unmarshal(task.Payload(), &in); err != nil {
 			trace.After(ctx, beforeCtx, err)
-			return err
+			return log.Errorln(task.Type(),log.Any("request",in),log.NewWhy(err))
 		}
 		scp["req"] = in		
 		err := srv.{{.Name}}(ctx, &in)
 		if err != nil{
-			log.Errorln(task.Type(),log.Any("request",in),log.NewWhy(err))
+			err=log.Errorln(task.Type(),log.Any("request",in),log.NewWhy(err))
 		}else{
 			log.Println(task.Type(),log.Any("request",in))
 		}		
@@ -49,7 +49,7 @@ var {{.ServiceType}}Job {{.ServiceType}}SvcJob
 
 {{range .MethodSets}}
 func (j *{{$svrType}}SvcJob) {{.Name}}(in *{{.Request}}, opts ...asynq.Option) (*asynq.Task, error) {
-	payload, err := proto.Marshal(in)
+	payload, err := json.Marshal(in)
 	if err != nil {
 		return nil, err
 	}
@@ -76,11 +76,12 @@ func New{{.ServiceType}}JobClient (client *asynq.Client) {{.ServiceType}}JobClie
 func (c *{{$svrType}}JobClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...asynq.Option) (*asynq.TaskInfo, error) {
 	task, err := {{$svrType}}Job.{{.Name}}(in, opts...)
 	if err != nil {
-		return nil, err
+		return nil, log.Errorln("{{$svrType}}Job.{{.Name}}", log.Any("request", in),log.NewWhy(err))	
 	}
+	log.Println("{{$svrType}}Job.{{.Name}}", log.Any("request", in))	
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, err
+		return nil, log.Errorln("{{$svrType}}Job.{{.Name}} Enqueue", log.Any("request", in),log.NewWhy(err))
 	}
 	return info, nil
 }

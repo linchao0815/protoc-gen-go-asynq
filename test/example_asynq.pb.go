@@ -6,6 +6,7 @@ package example
 
 import (
 	context "context"
+	json "encoding/json"
 	asynq "github.com/hibiken/asynq"
 	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -21,6 +22,7 @@ var _ = new(context.Context)
 var _ = new(asynq.Task)
 var _ = new(emptypb.Empty)
 var _ = new(proto.Message)
+var _ = new(json.InvalidUTF8Error)
 
 type UserJobServer interface {
 	CreateUser(context.Context, *CreateUserPayload) error
@@ -37,14 +39,14 @@ func _User_CreateUser_Job_Handler(srv UserJobServer) func(context.Context, *asyn
 		var in CreateUserPayload
 		ctx, beforeCtx := trace.Before(ctx, "asynq", task.Type())
 		scp := rkgrpcmid.GetServerContextPayload(ctx)
-		if err := proto.Unmarshal(task.Payload(), &in); err != nil {
+		if err := json.Unmarshal(task.Payload(), &in); err != nil {
 			trace.After(ctx, beforeCtx, err)
-			return err
+			return log.Errorln(task.Type(), log.Any("request", in), log.NewWhy(err))
 		}
 		scp["req"] = in
 		err := srv.CreateUser(ctx, &in)
 		if err != nil {
-			log.Errorln(task.Type(), log.Any("request", in), log.NewWhy(err))
+			err = log.Errorln(task.Type(), log.Any("request", in), log.NewWhy(err))
 		} else {
 			log.Println(task.Type(), log.Any("request", in))
 		}
@@ -58,14 +60,14 @@ func _User_UpdateUser_Job_Handler(srv UserJobServer) func(context.Context, *asyn
 		var in UpdateUserPayload
 		ctx, beforeCtx := trace.Before(ctx, "asynq", task.Type())
 		scp := rkgrpcmid.GetServerContextPayload(ctx)
-		if err := proto.Unmarshal(task.Payload(), &in); err != nil {
+		if err := json.Unmarshal(task.Payload(), &in); err != nil {
 			trace.After(ctx, beforeCtx, err)
-			return err
+			return log.Errorln(task.Type(), log.Any("request", in), log.NewWhy(err))
 		}
 		scp["req"] = in
 		err := srv.UpdateUser(ctx, &in)
 		if err != nil {
-			log.Errorln(task.Type(), log.Any("request", in), log.NewWhy(err))
+			err = log.Errorln(task.Type(), log.Any("request", in), log.NewWhy(err))
 		} else {
 			log.Println(task.Type(), log.Any("request", in))
 		}
@@ -79,7 +81,7 @@ type UserSvcJob struct{}
 var UserJob UserSvcJob
 
 func (j *UserSvcJob) CreateUser(in *CreateUserPayload, opts ...asynq.Option) (*asynq.Task, error) {
-	payload, err := proto.Marshal(in)
+	payload, err := json.Marshal(in)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +90,7 @@ func (j *UserSvcJob) CreateUser(in *CreateUserPayload, opts ...asynq.Option) (*a
 }
 
 func (j *UserSvcJob) UpdateUser(in *UpdateUserPayload, opts ...asynq.Option) (*asynq.Task, error) {
-	payload, err := proto.Marshal(in)
+	payload, err := json.Marshal(in)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +114,12 @@ func NewUserJobClient(client *asynq.Client) UserJobClient {
 func (c *UserJobClientImpl) CreateUser(ctx context.Context, in *CreateUserPayload, opts ...asynq.Option) (*asynq.TaskInfo, error) {
 	task, err := UserJob.CreateUser(in, opts...)
 	if err != nil {
-		return nil, err
+		return nil, log.Errorln("UserJob.CreateUser", log.Any("request", in), log.NewWhy(err))
 	}
+	log.Println("UserJob.CreateUser", log.Any("request", in))
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, err
+		return nil, log.Errorln("UserJob.CreateUser Enqueue", log.Any("request", in), log.NewWhy(err))
 	}
 	return info, nil
 }
@@ -124,11 +127,12 @@ func (c *UserJobClientImpl) CreateUser(ctx context.Context, in *CreateUserPayloa
 func (c *UserJobClientImpl) UpdateUser(ctx context.Context, in *UpdateUserPayload, opts ...asynq.Option) (*asynq.TaskInfo, error) {
 	task, err := UserJob.UpdateUser(in, opts...)
 	if err != nil {
-		return nil, err
+		return nil, log.Errorln("UserJob.UpdateUser", log.Any("request", in), log.NewWhy(err))
 	}
+	log.Println("UserJob.UpdateUser", log.Any("request", in))
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, err
+		return nil, log.Errorln("UserJob.UpdateUser Enqueue", log.Any("request", in), log.NewWhy(err))
 	}
 	return info, nil
 }

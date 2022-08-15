@@ -15,6 +15,7 @@ const (
 	asynqPackage   = protogen.GoImportPath("github.com/hibiken/asynq")
 	emptyPackage   = protogen.GoImportPath("google.golang.org/protobuf/types/known/emptypb")
 	protoPackage   = protogen.GoImportPath("google.golang.org/protobuf/proto")
+	jsonPackage    = protogen.GoImportPath("encoding/json")
 )
 
 var methodSets = make(map[string]int)
@@ -50,6 +51,7 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	g.P("var _ = new(", asynqPackage.Ident("Task"), ")")
 	g.P("var _ = new(", emptyPackage.Ident("Empty"), ")")
 	g.P("var _ = new(", protoPackage.Ident("Message"), ")")
+	g.P("var _ = new(", jsonPackage.Ident("InvalidUTF8Error"), ")")
 	g.P()
 
 	for _, service := range file.Services {
