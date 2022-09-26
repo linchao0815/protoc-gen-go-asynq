@@ -25,26 +25,29 @@ func Register{{.ServiceType}}JobServer(mux *asynq.ServeMux, srv {{.ServiceType}}
 func _{{$svrType}}_{{.Name}}_Job_Handler(srv {{$svrType}}JobServer) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var in {{.Request}}
-		t:=&trace.TaskPaylod{
+		t:=&igstrace.TaskPaylod{
 			In: &in,
 		}
 		if err := json.Unmarshal(task.Payload(), &t); err != nil {
-			return logger.GetSkip(2).Errorln(task.Type(), logger.NewRequest(t), logger.NewWhy(err))
+			return logger.GetSkip(1).Errorln(task.Type(), logger.NewRequest(t), logger.NewWhy(err))
 		}	
-		//ctx, beforeCtx := trace.Before(ctx, "asynq", task.Type())
-		scp := rkgrpcmid.GetServerContextPayload(ctx)		
+		//ctx, beforeCtx := igstrace.Before(ctx, "asynq", task.Type())
+		//scp := rkgrpcmid.GetServerContextPayload(ctx)		
 
-		scp["req"] = t
+		//scp["req"] = t
 		logger.MetricCounterInc("asynq_Handler")
+		ctx, span := igstrace.NewSpan(ctx, "{{.Name}}")
 		err := srv.{{.Name}}(ctx, t.In.(*{{.Request}}))
 		/*
 		if err != nil{
-			err=logger.GetSkip(2).Errorln(task.Type(),logger.NewRequest(t),logger.NewWhy(err))
+			err=logger.GetSkip(1).Errorln(task.Type(),logger.NewRequest(t),logger.NewWhy(err))
 		}else{
-			logger.GetSkip(2).Info(task.Type(),logger.NewRequest(t))
+			logger.GetSkip(1).Info(task.Type(),logger.NewRequest(t))
 		}
 		*/
-		//trace.After(ctx, beforeCtx, err)
+		//igstrace.After(ctx, beforeCtx, err)
+		span.SetAttributes(attribute.String("req", igstrace.ToMarshal(t)))
+		igstrace.EndSpan(span, err == nil)
 		return err
 	}
 }
@@ -54,27 +57,27 @@ type {{.ServiceType}}SvcJob struct {}
 var {{.ServiceType}}Job {{.ServiceType}}SvcJob
 
 {{range .MethodSets}}
-func (j *{{$svrType}}SvcJob) {{.Name}}(ctx context.Context,in *{{.Request}}, opts ...asynq.Option) (*asynq.Task, error) {
+func (j *{{$svrType}}SvcJob) {{.Name}}(ctx context.Context,in *{{.Request}}, opts ...asynq.Option) (*asynq.Task, *http.Header, error) {
 	// get trace metadata
 	header := http.Header{}	
 	pg:=rkgrpcctx.GetTracerPropagator(ctx)
 	if pg != nil{
 		pg.Inject(ctx, propagation.HeaderCarrier(header))	
 	}else{
-		logger.GetSkip(2).Errorln("{{.Name}} GetTracerPropagator=nil")
+		logger.GetSkip(1).Errorln("{{.Name}} GetTracerPropagator=nil")
 	}	
-	t:=&trace.TaskPaylod{
+	t:=&igstrace.TaskPaylod{
 		In: in,
 		TraceHeader: header,
 	}	
 	payload, err := json.Marshal(t)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	//logger.GetSkip(2).Info("{{.Name}}", logger.NewRequest(string(payload)))
+	//logger.GetSkip(1).Info("{{.Name}}", logger.NewRequest(string(payload)))
 
 	task := asynq.NewTask("{{.Typename}}", payload, opts...)
-	return task, nil
+	return task, &header, nil
 }
 {{end}}
 
@@ -94,16 +97,20 @@ func New{{.ServiceType}}JobClient (client *asynq.Client) {{.ServiceType}}JobClie
 
 {{range .MethodSets}}
 func (c *{{$svrType}}JobClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...asynq.Option) (*asynq.TaskInfo, error) {
-	task, err := {{$svrType}}Job.{{.Name}}(ctx, in, opts...)
+	task, header, err := {{$svrType}}Job.{{.Name}}(ctx, in, opts...)
 	if err != nil {
-		return nil, logger.GetSkip(2).Errorln("{{$svrType}}Job.{{.Name}}", logger.NewRequest(in),logger.NewWhy(err))	
+		return nil, logger.GetSkip(1).Errorln("{{$svrType}}Job.{{.Name}}", logger.NewRequest(in),logger.NewWhy(err))	
 	}
-	//logger.GetSkip(2).Info("{{$svrType}}Job.{{.Name}}", logger.NewRequest(in))
+	//logger.GetSkip(1).Info("{{$svrType}}Job.{{.Name}}", logger.NewRequest(in))
 	logger.MetricCounterInc("asynq_Enqueue")
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, logger.GetSkip(2).Errorln("{{$svrType}}Job.{{.Name}} Enqueue", logger.NewRequest(in),logger.NewWhy(err))
+		return nil, logger.GetSkip(1).Errorln("{{$svrType}}Job.{{.Name}} Enqueue", logger.NewRequest(in),logger.NewWhy(err))
 	}
+	// 把 Trace 信息，存入 Metadata，以 Header 的形式返回给 httpclient
+	for k, v := range *header {
+		rkgrpcctx.AddHeaderToClient(ctx, k, strings.Join(v, ","))
+	}	
 	return info, nil
 }
 {{end}}
