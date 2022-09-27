@@ -12,13 +12,14 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-import "igspkg/logger"
-import "igspkg/igstrace"
+import "fmt"
 import "net/http"
+import "myasynq"
 import "strings"
 import "go.opentelemetry.io/otel/propagation"
 import "go.opentelemetry.io/otel/attribute"
 import rkgrpcctx "github.com/rookie-ninja/rk-grpc/v2/middleware/context"
+import rkasynq "github.com/rookie-ninja/rk-repo/asynq"
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the asynq package it is being compiled against.
@@ -40,60 +41,28 @@ func RegisterUserJobServer(mux *asynq.ServeMux, srv UserJobServer) {
 
 func _User_CreateUser_Job_Handler(srv UserJobServer) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, task *asynq.Task) error {
-		var in CreateUserPayload
-		t := &igstrace.TaskPaylod{
-			In: &in,
-		}
+		t := &myasynq.TaskPaylod{}
 		if err := json.Unmarshal(task.Payload(), &t); err != nil {
-			return logger.GetSkip(1).Errorln(task.Type(), logger.NewRequest(t), logger.NewWhy(err))
+			return fmt.Errorf("%s req=%s err=%s", task.Type(), t, err)
 		}
-		//ctx, beforeCtx := igstrace.Before(ctx, "asynq", task.Type())
-		//scp := rkgrpcmid.GetServerContextPayload(ctx)
-
-		//scp["req"] = t
-		logger.MetricCounterInc("asynq_Handler")
-		ctx, span := igstrace.NewSpan(ctx, "CreateUser")
+		ctx, span := rkasynq.NewSpan(ctx, "CreateUser")
 		err := srv.CreateUser(ctx, t.In.(*CreateUserPayload))
-		/*
-			if err != nil{
-				err=logger.GetSkip(1).Errorln(task.Type(),logger.NewRequest(t),logger.NewWhy(err))
-			}else{
-				logger.GetSkip(1).Info(task.Type(),logger.NewRequest(t))
-			}
-		*/
-		//igstrace.After(ctx, beforeCtx, err)
-		span.SetAttributes(attribute.String("req", igstrace.ToMarshal(t)))
-		igstrace.EndSpan(span, err == nil)
+		span.SetAttributes(attribute.String("req", myasynq.ToMarshal(t)))
+		myasynq.EndSpan(span, err == nil)
 		return err
 	}
 }
 
 func _User_UpdateUser_Job_Handler(srv UserJobServer) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, task *asynq.Task) error {
-		var in UpdateUserPayload
-		t := &igstrace.TaskPaylod{
-			In: &in,
-		}
+		t := &myasynq.TaskPaylod{}
 		if err := json.Unmarshal(task.Payload(), &t); err != nil {
-			return logger.GetSkip(1).Errorln(task.Type(), logger.NewRequest(t), logger.NewWhy(err))
+			return fmt.Errorf("%s req=%s err=%s", task.Type(), t, err)
 		}
-		//ctx, beforeCtx := igstrace.Before(ctx, "asynq", task.Type())
-		//scp := rkgrpcmid.GetServerContextPayload(ctx)
-
-		//scp["req"] = t
-		logger.MetricCounterInc("asynq_Handler")
-		ctx, span := igstrace.NewSpan(ctx, "UpdateUser")
+		ctx, span := rkasynq.NewSpan(ctx, "UpdateUser")
 		err := srv.UpdateUser(ctx, t.In.(*UpdateUserPayload))
-		/*
-			if err != nil{
-				err=logger.GetSkip(1).Errorln(task.Type(),logger.NewRequest(t),logger.NewWhy(err))
-			}else{
-				logger.GetSkip(1).Info(task.Type(),logger.NewRequest(t))
-			}
-		*/
-		//igstrace.After(ctx, beforeCtx, err)
-		span.SetAttributes(attribute.String("req", igstrace.ToMarshal(t)))
-		igstrace.EndSpan(span, err == nil)
+		span.SetAttributes(attribute.String("req", myasynq.ToMarshal(t)))
+		myasynq.EndSpan(span, err == nil)
 		return err
 	}
 }
@@ -109,9 +78,9 @@ func (j *UserSvcJob) CreateUser(ctx context.Context, in *CreateUserPayload, opts
 	if pg != nil {
 		pg.Inject(ctx, propagation.HeaderCarrier(header))
 	} else {
-		logger.GetSkip(1).Errorln("CreateUser GetTracerPropagator=nil")
+		fmt.Println("CreateUser GetTracerPropagator=nil")
 	}
-	t := &igstrace.TaskPaylod{
+	t := &myasynq.TaskPaylod{
 		In:          in,
 		TraceHeader: header,
 	}
@@ -119,7 +88,6 @@ func (j *UserSvcJob) CreateUser(ctx context.Context, in *CreateUserPayload, opts
 	if err != nil {
 		return nil, nil, err
 	}
-	//logger.GetSkip(1).Info("CreateUser", logger.NewRequest(string(payload)))
 
 	task := asynq.NewTask("user:create", payload, opts...)
 	return task, &header, nil
@@ -132,9 +100,9 @@ func (j *UserSvcJob) UpdateUser(ctx context.Context, in *UpdateUserPayload, opts
 	if pg != nil {
 		pg.Inject(ctx, propagation.HeaderCarrier(header))
 	} else {
-		logger.GetSkip(1).Errorln("UpdateUser GetTracerPropagator=nil")
+		fmt.Println("UpdateUser GetTracerPropagator=nil")
 	}
-	t := &igstrace.TaskPaylod{
+	t := &myasynq.TaskPaylod{
 		In:          in,
 		TraceHeader: header,
 	}
@@ -142,7 +110,6 @@ func (j *UserSvcJob) UpdateUser(ctx context.Context, in *UpdateUserPayload, opts
 	if err != nil {
 		return nil, nil, err
 	}
-	//logger.GetSkip(1).Info("UpdateUser", logger.NewRequest(string(payload)))
 
 	task := asynq.NewTask("user:update", payload, opts...)
 	return task, &header, nil
@@ -164,13 +131,11 @@ func NewUserJobClient(client *asynq.Client) UserJobClient {
 func (c *UserJobClientImpl) CreateUser(ctx context.Context, in *CreateUserPayload, opts ...asynq.Option) (*asynq.TaskInfo, error) {
 	task, header, err := UserJob.CreateUser(ctx, in, opts...)
 	if err != nil {
-		return nil, logger.GetSkip(1).Errorln("UserJob.CreateUser", logger.NewRequest(in), logger.NewWhy(err))
+		return nil, fmt.Errorf("ServerA_TaskJob.GameTest_Task req:%s err:%s", in, err)
 	}
-	//logger.GetSkip(1).Info("UserJob.CreateUser", logger.NewRequest(in))
-	logger.MetricCounterInc("asynq_Enqueue")
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, logger.GetSkip(1).Errorln("UserJob.CreateUser Enqueue", logger.NewRequest(in), logger.NewWhy(err))
+		return nil, fmt.Errorf("ServerA_TaskJob.GameTest_Task Enqueue req:%s err:%s", in, err)
 	}
 	// 把 Trace 信息，存入 Metadata，以 Header 的形式返回给 httpclient
 	for k, v := range *header {
@@ -182,13 +147,11 @@ func (c *UserJobClientImpl) CreateUser(ctx context.Context, in *CreateUserPayloa
 func (c *UserJobClientImpl) UpdateUser(ctx context.Context, in *UpdateUserPayload, opts ...asynq.Option) (*asynq.TaskInfo, error) {
 	task, header, err := UserJob.UpdateUser(ctx, in, opts...)
 	if err != nil {
-		return nil, logger.GetSkip(1).Errorln("UserJob.UpdateUser", logger.NewRequest(in), logger.NewWhy(err))
+		return nil, fmt.Errorf("ServerA_TaskJob.GameTest_Task req:%s err:%s", in, err)
 	}
-	//logger.GetSkip(1).Info("UserJob.UpdateUser", logger.NewRequest(in))
-	logger.MetricCounterInc("asynq_Enqueue")
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, logger.GetSkip(1).Errorln("UserJob.UpdateUser Enqueue", logger.NewRequest(in), logger.NewWhy(err))
+		return nil, fmt.Errorf("ServerA_TaskJob.GameTest_Task Enqueue req:%s err:%s", in, err)
 	}
 	// 把 Trace 信息，存入 Metadata，以 Header 的形式返回给 httpclient
 	for k, v := range *header {

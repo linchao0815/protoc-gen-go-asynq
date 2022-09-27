@@ -1,10 +1,9 @@
-module github.com/linchao0815/protoc-gen-go-asynq
+module github.com/linchao0815/protoc-gen-go-asynqgen
 
 go 1.17
 
 require (
 	github.com/hibiken/asynq v0.23.0
-	github.com/jmploop/protoc-gen-go-asynq v1.0.4
 	github.com/rookie-ninja/rk-grpc/v2 v2.2.8
 	go.opentelemetry.io/otel v1.10.0
 	google.golang.org/protobuf v1.28.0

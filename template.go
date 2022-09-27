@@ -24,30 +24,14 @@ func Register{{.ServiceType}}JobServer(mux *asynq.ServeMux, srv {{.ServiceType}}
 {{range .Methods}}
 func _{{$svrType}}_{{.Name}}_Job_Handler(srv {{$svrType}}JobServer) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, task *asynq.Task) error {
-		var in {{.Request}}
-		t:=&igstrace.TaskPaylod{
-			In: &in,
-		}
+		t := &myasynq.TaskPaylod{}
 		if err := json.Unmarshal(task.Payload(), &t); err != nil {
-			return logger.GetSkip(1).Errorln(task.Type(), logger.NewRequest(t), logger.NewWhy(err))
+			return fmt.Errorf("%s req=%s err=%s",task.Type(), t, err)
 		}	
-		//ctx, beforeCtx := igstrace.Before(ctx, "asynq", task.Type())
-		//scp := rkgrpcmid.GetServerContextPayload(ctx)		
-
-		//scp["req"] = t
-		logger.MetricCounterInc("asynq_Handler")
-		ctx, span := igstrace.NewSpan(ctx, "{{.Name}}")
+		ctx, span := rkasynq.NewSpan(ctx, "{{.Name}}")
 		err := srv.{{.Name}}(ctx, t.In.(*{{.Request}}))
-		/*
-		if err != nil{
-			err=logger.GetSkip(1).Errorln(task.Type(),logger.NewRequest(t),logger.NewWhy(err))
-		}else{
-			logger.GetSkip(1).Info(task.Type(),logger.NewRequest(t))
-		}
-		*/
-		//igstrace.After(ctx, beforeCtx, err)
-		span.SetAttributes(attribute.String("req", igstrace.ToMarshal(t)))
-		igstrace.EndSpan(span, err == nil)
+		span.SetAttributes(attribute.String("req", myasynq.ToMarshal(t)))
+		myasynq.EndSpan(span, err == nil)
 		return err
 	}
 }
@@ -64,9 +48,9 @@ func (j *{{$svrType}}SvcJob) {{.Name}}(ctx context.Context,in *{{.Request}}, opt
 	if pg != nil{
 		pg.Inject(ctx, propagation.HeaderCarrier(header))	
 	}else{
-		logger.GetSkip(1).Errorln("{{.Name}} GetTracerPropagator=nil")
+		fmt.Println("{{.Name}} GetTracerPropagator=nil")
 	}	
-	t:=&igstrace.TaskPaylod{
+	t:=&myasynq.TaskPaylod{
 		In: in,
 		TraceHeader: header,
 	}	
@@ -74,7 +58,6 @@ func (j *{{$svrType}}SvcJob) {{.Name}}(ctx context.Context,in *{{.Request}}, opt
 	if err != nil {
 		return nil, nil, err
 	}
-	//logger.GetSkip(1).Info("{{.Name}}", logger.NewRequest(string(payload)))
 
 	task := asynq.NewTask("{{.Typename}}", payload, opts...)
 	return task, &header, nil
@@ -99,13 +82,11 @@ func New{{.ServiceType}}JobClient (client *asynq.Client) {{.ServiceType}}JobClie
 func (c *{{$svrType}}JobClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...asynq.Option) (*asynq.TaskInfo, error) {
 	task, header, err := {{$svrType}}Job.{{.Name}}(ctx, in, opts...)
 	if err != nil {
-		return nil, logger.GetSkip(1).Errorln("{{$svrType}}Job.{{.Name}}", logger.NewRequest(in),logger.NewWhy(err))	
+		return nil, fmt.Errorf("ServerA_TaskJob.GameTest_Task req:%s err:%s",in,err)	
 	}
-	//logger.GetSkip(1).Info("{{$svrType}}Job.{{.Name}}", logger.NewRequest(in))
-	logger.MetricCounterInc("asynq_Enqueue")
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, logger.GetSkip(1).Errorln("{{$svrType}}Job.{{.Name}} Enqueue", logger.NewRequest(in),logger.NewWhy(err))
+		return nil, fmt.Errorf("ServerA_TaskJob.GameTest_Task Enqueue req:%s err:%s",in,err)
 	}
 	// 把 Trace 信息，存入 Metadata，以 Header 的形式返回给 httpclient
 	for k, v := range *header {
