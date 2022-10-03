@@ -4,9 +4,9 @@ go 1.17
 
 require (
 	github.com/hibiken/asynq v0.23.0
-	github.com/jmploop/protoc-gen-go-asynq v1.0.4
 	github.com/rookie-ninja/rk-grpc/v2 v2.2.8
 	go.opentelemetry.io/otel v1.10.0
+	go.opentelemetry.io/otel/trace v1.10.0
 	google.golang.org/protobuf v1.28.0
 )
 
@@ -39,7 +39,6 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.12.0 // indirect
 	github.com/subosito/gotenv v1.3.0 // indirect
-	go.opentelemetry.io/otel/trace v1.10.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
