@@ -9,20 +9,20 @@ import (
 var asynqTemplate = `
 {{$svrType := .ServiceType}}
 {{$svrName := .ServiceName}}
-type {{.ServiceType}}TaskServer interface {
+type {{.ServiceType}}JobServer interface {
 {{- range .MethodSets}}
 	{{.Name}}(context.Context, *{{.Request}}) (error)
 {{- end}}
 }
 
-func Register{{.ServiceType}}TaskServer(mux *asynq.ServeMux, srv {{.ServiceType}}TaskServer) {
+func Register{{.ServiceType}}JobServer(mux *asynq.ServeMux, srv {{.ServiceType}}JobServer) {
 	{{- range .Methods}}
 	mux.HandleFunc("{{.Typename}}", _{{$svrType}}_{{.Name}}_Task_Handler(srv))
 	{{- end}}
 }
 
 {{range .Methods}}
-func _{{$svrType}}_{{.Name}}_Task_Handler(srv {{$svrType}}TaskServer) func(context.Context, *asynq.Task) error {
+func _{{$svrType}}_{{.Name}}_Task_Handler(srv {{$svrType}}JobServer) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, task *asynq.Task) error {
 		in := &{{.Request}}{}
 
@@ -30,9 +30,7 @@ func _{{$svrType}}_{{.Name}}_Task_Handler(srv {{$svrType}}TaskServer) func(conte
 		if err != nil {
 			return err
 		}
-
 		err = srv.{{.Name}}(ctx, in)
-
 		igstrace.Handle_task_after(span, err)
 
 		return err
@@ -40,22 +38,22 @@ func _{{$svrType}}_{{.Name}}_Task_Handler(srv {{$svrType}}TaskServer) func(conte
 }
 {{end}}
 
-type {{.ServiceType}}TaskClient interface {
+type {{.ServiceType}}JobClient interface {
 {{- range .MethodSets}}
-	{{.Name}}(ctx context.Context, req *{{.Request}}, opts ...asynq.Option) (info *asynq.TaskInfo, span oteltrace.Span, err error) 
+	{{.Name}}(ctx context.Context, req *{{.Request}}, opts ...asynq.Option) (info *asynq.TaskInfo, err error) //span oteltrace.Span, 
 {{- end}}
 }
 
-type {{.ServiceType}}TaskClientImpl struct{
+type {{.ServiceType}}JobClientImpl struct{
 	cc *asynq.Client
 }
 	
-func New{{.ServiceType}}TaskClient (client *asynq.Client) {{.ServiceType}}TaskClient {
-	return &{{.ServiceType}}TaskClientImpl{client}
+func New{{.ServiceType}}JobClient (client *asynq.Client) {{.ServiceType}}JobClient {
+	return &{{.ServiceType}}JobClientImpl{client}
 }
 
 {{range .MethodSets}}
-func (c *{{$svrType}}TaskClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...asynq.Option) (*asynq.TaskInfo, oteltrace.Span, error) {
+func (c *{{$svrType}}JobClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...asynq.Option) (*asynq.TaskInfo, error) { //, oteltrace.Span
 	if rkgrpcctx.GetTracerPropagator(ctx) != nil {
 		ctx = rkgrpcctx.InjectSpanToNewContext(ctx)
 	}
@@ -73,16 +71,16 @@ func (c *{{$svrType}}TaskClientImpl) {{.Name}}(ctx context.Context, in *{{.Reque
 		Payload: in,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	task := asynq.NewTask("{{.Typename}}", wrap, opts...)
 
 	info, err := c.cc.Enqueue(task)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return info, span, nil
+	return info, nil //, span
 }
 {{end}}
 `
