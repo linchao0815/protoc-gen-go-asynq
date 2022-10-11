@@ -75,11 +75,16 @@ func (c *{{$svrType}}JobClientImpl) {{.Name}}(ctx context.Context, in *{{.Reques
 	}
 
 	task := asynq.NewTask("{{.Typename}}", wrap, opts...)
-
-	info, err := c.cc.Enqueue(task)
-	if err != nil {
-		return nil, err
-	}
+	info, err :=func()(info *asynq.TaskInfo,err error){
+		times := 0
+		for {
+			info, err = c.cc.Enqueue(task)
+			if !igstrace.CheckAsynqRedisErr(&times, err){
+				break
+			}
+		}
+		return info, err
+	}()
 	return info, nil //, span
 }
 {{end}}

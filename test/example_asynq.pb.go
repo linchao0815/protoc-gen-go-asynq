@@ -102,11 +102,16 @@ func (c *UserJobClientImpl) CreateUser(ctx context.Context, in *CreateUserPayloa
 	}
 
 	task := asynq.NewTask("user:create", wrap, opts...)
-
-	info, err := c.cc.Enqueue(task)
-	if err != nil {
-		return nil, err
-	}
+	info, err := func() (info *asynq.TaskInfo, err error) {
+		times := 0
+		for {
+			info, err = c.cc.Enqueue(task)
+			if !igstrace.CheckAsynqRedisErr(&times, err) {
+				break
+			}
+		}
+		return info, err
+	}()
 	return info, nil //, span
 }
 
@@ -132,10 +137,15 @@ func (c *UserJobClientImpl) UpdateUser(ctx context.Context, in *UpdateUserPayloa
 	}
 
 	task := asynq.NewTask("user:update", wrap, opts...)
-
-	info, err := c.cc.Enqueue(task)
-	if err != nil {
-		return nil, err
-	}
+	info, err := func() (info *asynq.TaskInfo, err error) {
+		times := 0
+		for {
+			info, err = c.cc.Enqueue(task)
+			if !igstrace.CheckAsynqRedisErr(&times, err) {
+				break
+			}
+		}
+		return info, err
+	}()
 	return info, nil //, span
 }
